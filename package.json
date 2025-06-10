@@ -31,7 +31,9 @@
       "helmet": "^7.0.0",
       "winston": "^3.10.0",
       "uuid": "^9.0.0",
-      "joi": "^17.9.2"
+      "joi": "^17.9.2",
+      "vm2": "^3.9.19",
+      "express-rate-limit": "^6.9.0"
     },
     "devDependencies": {
       "nodemon": "^3.0.1",
