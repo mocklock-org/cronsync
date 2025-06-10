@@ -1,0 +1,11 @@
+# Node_modules
+node_modules
+
+# Logs
+logs
+
+# Environment variables
+.env
+
+# Configuration
+cronsync.config.json
