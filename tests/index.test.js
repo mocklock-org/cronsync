@@ -168,3 +168,180 @@ describe('executeWithLock', () => {
   });
 });
 
+describe('stopJob', () => {
+  let cronSync;
+
+  beforeEach(() => {
+    jest.spyOn(Redis.prototype, 'ping').mockResolvedValue('PONG');
+    jest.spyOn(Redis.prototype, 'on').mockImplementation();
+    jest.spyOn(Redis.prototype, 'set').mockResolvedValue('OK');
+    jest.spyOn(Redis.prototype, 'eval').mockResolvedValue(1);
+  });
+
+  afterEach(async () => {
+    if (cronSync) {
+      await cronSync.disconnect();
+    }
+    jest.restoreAllMocks();
+  });
+
+  it('should stop a job and remove it from the jobs map', async () => {
+    cronSync = new CronSync();
+    
+    // Schedule a job first
+    const cronPattern = '*/5 * * * *';
+    const jobName = 'test-stop-job';
+    const taskFunction = jest.fn().mockResolvedValue('success');
+    
+    const jobId = await cronSync.schedule(cronPattern, jobName, taskFunction);
+    
+    // Verify job exists
+    expect(cronSync.jobs.has(jobId)).toBe(true);
+    const jobEntry = cronSync.jobs.get(jobId);
+    const stopSpy = jest.spyOn(jobEntry.job, 'stop');
+    
+    // Stop the job
+    await cronSync.stopJob(jobId);
+    
+    // Verify job was stopped and removed
+    expect(stopSpy).toHaveBeenCalled();
+    expect(cronSync.jobs.has(jobId)).toBe(false);
+  });
+
+  it('should throw error when trying to stop non-existent job', async () => {
+    cronSync = new CronSync();
+    const nonExistentJobId = 'non-existent-job-id';
+    
+    await expect(cronSync.stopJob(nonExistentJobId)).rejects.toThrow(
+      `Job not found: ${nonExistentJobId}`
+    );
+  });
+});
+
+describe('stopJob', () => {
+  let cronSync;
+
+  beforeEach(() => {
+    jest.spyOn(Redis.prototype, 'ping').mockResolvedValue('PONG');
+    jest.spyOn(Redis.prototype, 'on').mockImplementation();
+    jest.spyOn(Redis.prototype, 'set').mockResolvedValue('OK');
+    jest.spyOn(Redis.prototype, 'eval').mockResolvedValue(1);
+  });
+
+  afterEach(async () => {
+    if (cronSync) {
+      await cronSync.disconnect();
+    }
+    jest.restoreAllMocks();
+  });
+
+  it('should stop a job and remove it from the jobs map', async () => {
+    cronSync = new CronSync();
+    
+    // Schedule a job first
+    const cronPattern = '*/5 * * * *';
+    const jobName = 'test-stop-job';
+    const taskFunction = jest.fn().mockResolvedValue('success');
+    
+    const jobId = await cronSync.schedule(cronPattern, jobName, taskFunction);
+    
+    // Verify job exists
+    expect(cronSync.jobs.has(jobId)).toBe(true);
+    const jobEntry = cronSync.jobs.get(jobId);
+    const stopSpy = jest.spyOn(jobEntry.job, 'stop');
+    
+    // Stop the job
+    await cronSync.stopJob(jobId);
+    
+    // Verify job was stopped and removed
+    expect(stopSpy).toHaveBeenCalled();
+    expect(cronSync.jobs.has(jobId)).toBe(false);
+  });
+
+  it('should throw error when trying to stop non-existent job', async () => {
+    cronSync = new CronSync();
+    const nonExistentJobId = 'non-existent-job-id';
+    
+    await expect(cronSync.stopJob(nonExistentJobId)).rejects.toThrow(
+      `Job not found: ${nonExistentJobId}`
+    );
+  });
+});
+
+describe('getJobs', () => {
+  let cronSync;
+
+  beforeEach(() => {
+    jest.spyOn(Redis.prototype, 'ping').mockResolvedValue('PONG');
+    jest.spyOn(Redis.prototype, 'on').mockImplementation();
+    jest.spyOn(Redis.prototype, 'set').mockResolvedValue('OK');
+    jest.spyOn(Redis.prototype, 'eval').mockResolvedValue(1);
+  });
+
+  afterEach(async () => {
+    if (cronSync) {
+      await cronSync.disconnect();
+    }
+    jest.restoreAllMocks();
+  });
+
+  it('should return empty array when no jobs are scheduled', () => {
+    cronSync = new CronSync();
+    
+    const jobs = cronSync.getJobs();
+    
+    expect(jobs).toEqual([]);
+    expect(Array.isArray(jobs)).toBe(true);
+  });
+
+  it('should return correct job information for scheduled jobs', async () => {
+    cronSync = new CronSync();
+    
+    // Mock the cron.schedule function to return a job with getStatus method
+    const mockJob = {
+      start: jest.fn(),
+      stop: jest.fn(),
+      getStatus: jest.fn().mockReturnValue('scheduled')
+    };
+    
+    const cron = require('node-cron');
+    jest.spyOn(cron, 'schedule').mockReturnValue(mockJob);
+    
+    // Schedule multiple jobs
+    const job1Pattern = '*/5 * * * *';
+    const job1Name = 'daily-backup';
+    const job1Function = jest.fn();
+    
+    const job2Pattern = '0 0 * * *';
+    const job2Name = 'weekly-report';
+    const job2Function = jest.fn();
+    
+    const jobId1 = await cronSync.schedule(job1Pattern, job1Name, job1Function);
+    const jobId2 = await cronSync.schedule(job2Pattern, job2Name, job2Function);
+    
+    // Get jobs info
+    const jobs = cronSync.getJobs();
+    
+    // Verify structure and content
+    expect(jobs).toHaveLength(2);
+    expect(jobs[0]).toEqual({
+      id: jobId1,
+      name: job1Name,
+      pattern: job1Pattern,
+      createdAt: expect.any(Date),
+      lastRun: null,
+      runCount: 0,
+      isRunning: true
+    });
+    
+    expect(jobs[1]).toEqual({
+      id: jobId2,
+      name: job2Name,  
+      pattern: job2Pattern,
+      createdAt: expect.any(Date),
+      lastRun: null,
+      runCount: 0,
+      isRunning: true
+    });
+  });
+});
