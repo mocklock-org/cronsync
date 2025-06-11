@@ -8,7 +8,8 @@ jest.mock('ioredis', () => {
     hSet: jest.fn().mockResolvedValue('OK'),
     eval: jest.fn().mockResolvedValue(1),
     disconnect: jest.fn().mockResolvedValue(undefined),
-    on: jest.fn()
+    on: jest.fn(),
+    connect: jest.fn().mockResolvedValue(undefined)
   };
   return jest.fn(() => mockRedis);
 });
@@ -35,6 +36,8 @@ describe('CronSync', () => {
       redisUrl: 'redis://localhost:6379',
       logLevel: 'error'
     });
+
+    await cronSync.connect();
   });
 
   afterEach(async () => {
@@ -48,6 +51,7 @@ describe('CronSync', () => {
     const task = jest.fn().mockResolvedValue('success');
 
     redis.set.mockResolvedValueOnce('OK');
+    redis.hSet.mockResolvedValue('OK');
 
     await cronSync.schedule('*/5 * * * *', jobName, task);
 
