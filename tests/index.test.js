@@ -80,3 +80,91 @@ describe('CronSync', () => {
     });
   });
 });
+
+describe('executeWithLock', () => {
+  let cronSync;
+
+  beforeEach(() => {
+    jest.spyOn(Redis.prototype, 'ping').mockResolvedValue('PONG');
+    jest.spyOn(Redis.prototype, 'on').mockImplementation();
+    jest.spyOn(Redis.prototype, 'set').mockResolvedValue('OK');
+    jest.spyOn(Redis.prototype, 'eval').mockResolvedValue(1);
+    
+    // Create hSet method if it doesn't exist and mock it
+    Redis.prototype.hSet = jest.fn().mockResolvedValue(1);
+  });
+
+  afterEach(async () => {
+    if (cronSync) {
+      await cronSync.disconnect();
+    }
+    // Clean up the added method
+    delete Redis.prototype.hSet;
+    jest.restoreAllMocks();
+  });
+
+  it('should execute task when lock is acquired and update job statistics', async () => {
+    // Setup
+    const mockTaskFunction = jest.fn().mockResolvedValue('task completed');
+    const jobName = 'test-job';
+    
+    cronSync = new CronSync();
+    
+    // Add a job entry to the jobs Map to track statistics with proper job object
+    const jobId = 'test-job-id';
+    const mockJob = {
+      stop: jest.fn(),
+      start: jest.fn(),
+      getStatus: jest.fn().mockReturnValue('scheduled')
+    };
+    
+    cronSync.jobs.set(jobId, {
+      job: mockJob,
+      name: jobName,
+      pattern: '*/5 * * * *',
+      task: mockTaskFunction,
+      lastRun: null,
+      runCount: 0
+    });
+    
+    // Execute
+    const result = await cronSync.executeWithLock(jobName, mockTaskFunction);
+    
+    // Verify task execution
+    expect(mockTaskFunction).toHaveBeenCalledTimes(1);
+    expect(result).toBe('task completed');
+    
+    // Verify lock acquisition
+    expect(Redis.prototype.set).toHaveBeenCalledWith(
+      `cronsync:lock:${jobName}`,
+      cronSync.instanceId,
+      { PX: cronSync.lockTimeout, NX: true }
+    );
+    
+    // Verify job statistics were updated
+    const jobEntry = cronSync.jobs.get(jobId);
+    expect(jobEntry.runCount).toBe(1);
+    expect(jobEntry.lastRun).toBeInstanceOf(Date);
+    
+    // Verify Redis stats were recorded
+    expect(Redis.prototype.hSet).toHaveBeenCalledWith(
+      `cronsync:stats:${jobName}`,
+      expect.objectContaining({
+        lastRun: expect.any(String),
+        duration: expect.any(String),
+        status: 'success',
+        instanceId: cronSync.instanceId
+      })
+    );
+    
+    // Verify lock was released
+    expect(Redis.prototype.eval).toHaveBeenCalledWith(
+      expect.stringContaining('redis.call("get", KEYS[1])'),
+      {
+        keys: [`cronsync:lock:${jobName}`],
+        arguments: [cronSync.instanceId]
+      }
+    );
+  });
+});
+
