@@ -2,8 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const Joi = require('joi');
-const path = require('path');
-const fs = require('fs').promises;
 const { VM } = require('vm2');
 const CronSync = require('./index');
 
@@ -37,7 +35,7 @@ const scheduleJobSchema = Joi.object({
     .max(50),
   cronPattern: Joi.string()
     .required()
-    .pattern(/^[0-9*,\/-\s]+$/)
+    .pattern(/^[0-9*,/-\s]+$/)
     .max(100),
   script: Joi.string()
     .required()
@@ -45,18 +43,18 @@ const scheduleJobSchema = Joi.object({
     .max(10000),
   options: Joi.object({
     timeout: Joi.number().min(100).max(30000).default(5000),
-    memory: Joi.number().min(1).max(512).default(64),
+    memory: Joi.number().min(1).max(512).default(64)
   }).default({})
 });
 
-async function executeScript(script, options) {
+async function executeScript (script, options) {
   const vm = new VM({
     timeout: options.timeout || 5000,
     sandbox: {
       console: {
         log: (...args) => console.log('[Script]', ...args),
         error: (...args) => console.error('[Script]', ...args),
-        warn: (...args) => console.warn('[Script]', ...args),
+        warn: (...args) => console.warn('[Script]', ...args)
       },
       setTimeout: (fn, ms) => setTimeout(fn, Math.min(ms, 5000)),
       clearTimeout,
@@ -64,8 +62,8 @@ async function executeScript(script, options) {
       Math,
       Buffer: {
         from: Buffer.from,
-        isBuffer: Buffer.isBuffer,
-      },
+        isBuffer: Buffer.isBuffer
+      }
     },
     eval: false,
     wasm: false,
@@ -78,7 +76,7 @@ async function executeScript(script, options) {
       mock: {
         fs: {
           readFileSync: () => { throw new Error('File system access not allowed'); },
-          writeFileSync: () => { throw new Error('File system access not allowed'); },
+          writeFileSync: () => { throw new Error('File system access not allowed'); }
         }
       }
     }
@@ -171,7 +169,7 @@ app.post('/jobs/stop-all', async (req, res) => {
   }
 });
 
-app.use((err, req, res, next) => {
+app.use((err, req, res, _next) => {
   console.error(err.stack);
   res.status(500).json({ 
     error: 'Something went wrong!',

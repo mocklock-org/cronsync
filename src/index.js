@@ -1,21 +1,23 @@
 const cron = require('node-cron');
-const { createClient } = require('redis');
 const { v4: uuidv4 } = require('uuid');
 const winston = require('winston');
+const Redis = require('ioredis');
 
 class CronSync {
-  constructor(options = {}) {
+  constructor (options = {}) {
     this.instanceId = options.instanceId || uuidv4();
     this.redisUrl = options.redisUrl || 'redis://localhost:6379';
     this.lockTimeout = options.lockTimeout || 300000;
+    this.logLevel = options.logLevel || 'info';
+    this.logger = this.setupLogger(this.logLevel);
     this.jobs = new Map();
     this.redis = null;
-    this.logger = this.setupLogger(options.logLevel || 'info');
+    this.isConnected = false;
     
     this.init();
   }
 
-  setupLogger(level) {
+  setupLogger (level) {
     return winston.createLogger({
       level,
       format: winston.format.combine(
@@ -29,10 +31,9 @@ class CronSync {
     });
   }
 
-  async init() {
+  async init () {
     try {
-      this.redis = createClient({ url: this.redisUrl });
-      await this.redis.connect();
+      await this.connect();
       this.logger.info(`CronSync initialized with instance ID: ${this.instanceId}`);
     } catch (error) {
       this.logger.error('Failed to connect to Redis:', error);
@@ -40,7 +41,32 @@ class CronSync {
     }
   }
 
-  async schedule(cronPattern, jobName, taskFunction, options = {}) {
+  async connect () {
+    try {
+      this.redis = new Redis(this.redisUrl);
+      
+      this.redis.on('error', (error) => {
+        this.isConnected = false;
+        this.logger.error('Redis connection error:', error);
+        throw error;
+      });
+
+      this.redis.on('connect', () => {
+        this.isConnected = true;
+        this.logger.info('Connected to Redis');
+      });
+
+      await this.redis.ping();
+      this.isConnected = true;
+      this.logger.info('Successfully connected to Redis');
+    } catch (error) {
+      this.isConnected = false;
+      this.logger.error('Failed to connect to Redis:', error);
+      throw error;
+    }
+  }
+
+  async schedule (cronPattern, jobName, taskFunction, options = {}) {
     const jobId = `${jobName}_${uuidv4()}`;
     
     if (!cron.validate(cronPattern)) {
@@ -71,10 +97,9 @@ class CronSync {
     return jobId;
   }
 
-  async executeWithLock(jobName, taskFunction, options = {}) {
+  async executeWithLock (jobName, taskFunction = {}) {
     const lockKey = `cronsync:lock:${jobName}`;
     const lockValue = this.instanceId;
-    const lockExpiry = Math.floor(Date.now() / 1000) + Math.floor(this.lockTimeout / 1000);
 
     try {
       const acquired = await this.redis.set(lockKey, lockValue, {
@@ -135,7 +160,7 @@ class CronSync {
     }
   }
 
-  async stopJob(jobId) {
+  async stopJob (jobId) {
     const jobEntry = this.jobs.get(jobId);
     if (!jobEntry) {
       throw new Error(`Job not found: ${jobId}`);
@@ -146,15 +171,15 @@ class CronSync {
     this.logger.info(`Job stopped: ${jobEntry.name}`);
   }
 
-  async stopAll() {
-    for (const [jobId, jobEntry] of this.jobs) {
+  async stopAll () {
+    for (const jobEntry of Array.from(this.jobs.values())) {
       jobEntry.job.stop();
       this.logger.info(`Job stopped: ${jobEntry.name}`);
     }
     this.jobs.clear();
   }
 
-  getJobs() {
+  getJobs () {
     const jobs = [];
     for (const [jobId, jobEntry] of this.jobs) {
       jobs.push({
@@ -170,12 +195,12 @@ class CronSync {
     return jobs;
   }
 
-  async getJobStats(jobName) {
+  async getJobStats (jobName) {
     const stats = await this.redis.hGetAll(`cronsync:stats:${jobName}`);
     return stats;
   }
 
-  async disconnect() {
+  async disconnect () {
     await this.stopAll();
     if (this.redis) {
       await this.redis.disconnect();

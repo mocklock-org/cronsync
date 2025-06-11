@@ -126,10 +126,10 @@ program
   .description('Initialize CronSync configuration')
   .action(() => {
     const configTemplate = {
-      "redisUrl": "redis://localhost:6379",
-      "port": 3000,
-      "logLevel": "info",
-      "jobs": []
+      'redisUrl': 'redis://localhost:6379',
+      'port': 3000,
+      'logLevel': 'info',
+      'jobs': []
     };
     
     const configPath = path.join(process.cwd(), 'cronsync.config.json');
