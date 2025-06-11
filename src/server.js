@@ -48,6 +48,12 @@ const scheduleJobSchema = Joi.object({
 });
 
 async function executeScript (script, options) {
+  try {
+    new Function(script);
+  } catch (error) {
+    throw new Error(`Invalid script syntax: ${error.message}`);
+  }
+
   const vm = new VM({
     timeout: options.timeout || 5000,
     sandbox: {
@@ -123,6 +129,12 @@ app.post('/jobs', async (req, res) => {
 
     const { name, cronPattern, script, options } = value;
 
+    try {
+      new Function(script);
+    } catch (error) {
+      return res.status(500).json({ error: `Invalid script syntax: ${error.message}` });
+    }
+
     const taskFunction = async () => {
       return await executeScript(script, options);
     };
@@ -189,8 +201,10 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 
-app.listen(PORT, () => {
-  console.log(`CronSync server running on port ${PORT}`);
-});
-
 module.exports = app;
+
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`CronSync server running on port ${PORT}`);
+  });
+}
