@@ -27,5 +27,23 @@ describe('CronSync', () => {
       expect(cronSync.jobs).toBeInstanceOf(Map);
       expect(cronSync.jobs.size).toBe(0);
     });
+
+    it('should initialize with custom options', () => {
+      const customOptions = {
+        instanceId: 'test-instance',
+        redisUrl: 'redis://custom:6380',
+        lockTimeout: 60000,
+        logLevel: 'debug'
+      };
+      
+      cronSync = new CronSync(customOptions);
+      
+      expect(cronSync.instanceId).toBe('test-instance');
+      expect(cronSync.redisUrl).toBe('redis://custom:6380');
+      expect(cronSync.lockTimeout).toBe(60000);
+      expect(cronSync.logLevel).toBe('debug');
+      expect(cronSync.jobs).toBeInstanceOf(Map);
+      expect(cronSync.jobs.size).toBe(0);
+    });
   });
 });

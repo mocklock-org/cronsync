@@ -9,3 +9,6 @@ logs
 
 # Configuration
 cronsync.config.json
+
+# Test coverage
+coverage/
