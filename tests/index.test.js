@@ -7,6 +7,10 @@ describe('CronSync', () => {
   beforeEach(() => {
     jest.spyOn(Redis.prototype, 'ping').mockResolvedValue('PONG');
     jest.spyOn(Redis.prototype, 'on').mockImplementation();
+    // Mock Redis set for lock acquisition
+    jest.spyOn(Redis.prototype, 'set').mockResolvedValue('OK');
+    // Mock Redis eval for lock release
+    jest.spyOn(Redis.prototype, 'eval').mockResolvedValue(1);
   });
 
   afterEach(async () => {
@@ -44,6 +48,35 @@ describe('CronSync', () => {
       expect(cronSync.logLevel).toBe('debug');
       expect(cronSync.jobs).toBeInstanceOf(Map);
       expect(cronSync.jobs.size).toBe(0);
+    });
+  });
+
+  describe('schedule', () => {
+    it('should successfully schedule a job', async () => {
+      cronSync = new CronSync();
+      const cronPattern = '*/5 * * * *';  // every 5 minutes
+      const jobName = 'test-job';
+      const taskFunction = jest.fn().mockResolvedValue('success');
+      
+      const jobId = await cronSync.schedule(cronPattern, jobName, taskFunction);
+      
+      // Verify job was added to the jobs Map
+      expect(cronSync.jobs.has(jobId)).toBe(true);
+      const jobEntry = cronSync.jobs.get(jobId);
+      
+      // Verify job properties
+      expect(jobEntry.name).toBe(jobName);
+      expect(jobEntry.pattern).toBe(cronPattern);
+      expect(jobEntry.task).toBe(taskFunction);
+      expect(jobEntry.runCount).toBe(0);
+      expect(jobEntry.lastRun).toBeNull();
+      expect(jobEntry.createdAt).toBeInstanceOf(Date);
+      
+      // Trigger the job manually to verify execution
+      await jobEntry.job.now();
+      
+      // Verify task was executed
+      expect(taskFunction).toHaveBeenCalled();
     });
   });
 });
